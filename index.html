@@ -188,7 +188,8 @@
     position:absolute;bottom:105%;left:50%;transform:translateX(-50%);
     font-size:clamp(14px,2.4vw,20px);opacity:0;pointer-events:none;z-index:25;
   }
-  .leaf{position:absolute;width:12px;height:12px;background:#E8B84B;border-radius:0 60% 0 60%;pointer-events:none;z-index:15;}
+  .leaf{position:absolute;width:16px;height:22px;pointer-events:none;z-index:15;}
+  .leaf svg{width:100%;height:100%;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.25));}
   .confetti-piece{position:absolute;width:8px;height:8px;pointer-events:none;z-index:40;}
 
   .achievement-toast{
@@ -278,6 +279,31 @@
   .cam-btn:hover{transform:translateY(-2px);}
   .meet-btn{left:14px;background:var(--pink);color:#fff;}
   .back-btn{left:14px;background:var(--gold);color:var(--ink);display:none;}
+
+  .object-note{
+    position:absolute;bottom:108%;left:50%;
+    transform:translateX(-50%) scale(0.5);
+    width:max-content;max-width:min(52vw,230px);
+    background:var(--cream);color:var(--ink);
+    border:3px solid var(--ink);border-radius:14px;
+    padding:8px 12px;
+    font-family:'Nunito',sans-serif;font-weight:700;
+    font-size:clamp(10px,1.5vw,12.5px);line-height:1.35;
+    text-align:left;white-space:normal;
+    opacity:0;pointer-events:none;z-index:35;
+    box-shadow:3px 3px 0 rgba(0,0,0,0.2);
+  }
+  .object-note::after{
+    content:'';position:absolute;bottom:-9px;left:22px;
+    width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;
+    border-top:9px solid var(--ink);
+  }
+  .object-note::before{
+    content:'';position:absolute;bottom:-5.5px;left:23.5px;
+    width:0;height:0;border-left:5.5px solid transparent;border-right:5.5px solid transparent;
+    border-top:7px solid var(--cream);z-index:1;
+  }
+  .object-note b{color:var(--pink-deep);}
 </style>
 </head>
 <body>
@@ -307,6 +333,7 @@
     <div class="window"></div>
     <div class="window window2"></div>
     <div class="door"></div>
+    <div class="object-note" id="houseNote"></div>
   </div>
 
   <div class="obj tree" id="tree">
@@ -325,6 +352,7 @@
     <div class="pole"></div>
     <div class="box"></div>
     <div class="flag" id="mailboxFlag"></div>
+    <div class="object-note" id="mailboxNote"></div>
   </div>
 
   <div class="obj lamppost" id="lamppost">
@@ -557,17 +585,26 @@
   }
 
   /* ============ CHARACTER STATE MACHINE ============ */
-  let currentX = POS.center;
+  let currentX = POS.bench-1;
   let facing = 1; // 1 right, -1 left
-  let currentState = 'idle';
+  let currentState = 'seatedIdle';
   let isTabHidden = false;
   let lastInteraction = Date.now();
   let schedulerTimer = null;
   let sitTarget = null; // percent to walk to then sit
   let cameOutside = true;
+  let hasStarted = false; // Ronnie stays put on the bench until first clicked
 
   function setPos(xPercent){ wrap.style.left = xPercent+'%'; }
   setPos(currentX);
+  gsap.set(character,{scaleY:0.86, y:6}); // resting seated pose
+
+  function startLiving(){
+    if(hasStarted) return;
+    hasStarted = true;
+    gsap.to(character,{scaleY:1, y:0, duration:0.35, ease:'sine.out'});
+    schedulerTimer = setTimeout(runNextAction, 900);
+  }
 
   function faceTo(dir){
     facing = dir;
@@ -752,7 +789,7 @@
     const delay = 1800 + Math.random()*2600;
     schedulerTimer = setTimeout(runNextAction, delay);
   }
-  schedulerTimer = setTimeout(runNextAction, 1500);
+  // Ronnie waits quietly on the bench — the scheduler is kicked off by startLiving() on first click.
 
   function markInteraction(){ lastInteraction = Date.now(); }
 
@@ -762,6 +799,7 @@
     e.stopPropagation();
     markInteraction();
     registerClick();
+    startLiving();
     clickBurst++;
     clearTimeout(clickBurstTimer);
     clickBurstTimer = setTimeout(()=>{
@@ -799,18 +837,41 @@
     }
   }
 
+  /* ============ OBJECT NOTES (mailbox launch info / house project info) ============ */
+  const houseNote = document.getElementById('houseNote');
+  const mailboxNote = document.getElementById('mailboxNote');
+  const HOUSE_NOTE = "🏠 <b>UYO</b> — Wackyville is a wacky world from the creative minds of uyo &amp; mac.";
+  const MAILBOX_NOTE = "📬 <b>Mint date:</b> July 8 — follow @uyo66_ for full details.";
+
+  function showObjectNote(el, html, duration){
+    gsap.killTweensOf(el);
+    el.innerHTML = html;
+    gsap.set(el,{opacity:0,scale:0.5});
+    gsap.timeline()
+      .to(el,{opacity:1,scale:1,duration:0.35,ease:'back.out(2.5)'})
+      .to(el,{opacity:1,duration:duration||3.4})
+      .to(el,{opacity:0,scale:0.6,duration:0.3,ease:'power1.in'});
+  }
+
   /* ============ OBJECT INTERACTIONS ============ */
   mailbox.addEventListener('click', (e)=>{
     e.stopPropagation(); markInteraction();
     gsap.timeline()
       .to(mailboxFlag,{rotation:-20,duration:0.08,repeat:5,yoyo:true,transformOrigin:'left bottom'})
       .to(mailboxFlag,{rotation:0,duration:0.1});
+    showObjectNote(mailboxNote, MAILBOX_NOTE, 4);
   });
 
   tree.addEventListener('click', (e)=>{
     e.stopPropagation(); markInteraction();
     const leaf = document.createElement('div');
     leaf.className='leaf';
+    leaf.innerHTML = '<svg viewBox="0 0 24 32" xmlns="http://www.w3.org/2000/svg">'
+      + '<polygon points="12,0 22,16 12,21 2,16" fill="#8C9EFF"/>'
+      + '<polygon points="12,0 12,21 2,16" fill="#627EEA"/>'
+      + '<polygon points="12,23 22,18 12,32 2,18" fill="#627EEA"/>'
+      + '<polygon points="12,23 12,32 2,18" fill="#3C4CA8"/>'
+      + '</svg>';
     scene.appendChild(leaf);
     const canopyRect = tree.querySelector('.canopy').getBoundingClientRect();
     const sceneRect = scene.getBoundingClientRect();
@@ -841,6 +902,7 @@
       gsap.killTweensOf(wrap);
       gsap.to(wrap,{x:'0%',duration:0.3});
     }
+    showObjectNote(houseNote, HOUSE_NOTE, 4.5);
   });
 
   document.querySelectorAll('[data-cloud]').forEach(cloud=>{
